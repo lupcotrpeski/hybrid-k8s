@@ -1,0 +1,56 @@
+apiVersion: eksctl.io/v1alpha5
+kind: ClusterConfig
+
+metadata:
+  name: dev
+  region: ap-southeast-2
+
+vpc:
+    id: "vpc-id"
+    subnets:
+        private:
+            ap-southeast-2a:
+                id: "subnet-id"
+            ap-southeast-2b:
+                id: "subnet-id"
+            ap-southeast-2c:
+                id: "subnet-id"
+        public:
+            ap-southeast-2a:
+                id: "subnet-id"
+            ap-southeast-2b:
+                id: "subnet-id"
+            ap-southeast-2c:
+                id: "subnet-id"
+cloudWatch:
+  clusterLogging:
+    enableTypes: ["*"]
+managedNodeGroups:
+  - name: intel
+    instanceType: t3.medium
+    labels: { Architecture: Intel }
+    desiredCapacity: 2
+    privateNetworking: true
+    volumeSize: 80
+    ssh:
+        allow: true
+        enableSsm: true
+    iam:
+      withAddonPolicies:
+        autoScaler: true
+        appMesh: true
+        albIngress: true
+        xRay: true
+        cloudWatch: true
+fargateProfiles:
+  - name: fp-dev
+    selectors:
+      - namespace: serverless
+#   - name: arm
+#     instanceType: m6g.medium
+#     labels: { Architecture: Arm }
+#     desiredCapacity: 2
+#     privateNetworking: true
+#     volumeSize: 80
+#     ssh:
+#         allow: true

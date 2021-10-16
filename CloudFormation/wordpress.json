@@ -1,0 +1,284 @@
+{
+    "AWSTemplateFormatVersion": "2010-09-09",
+    "Description": "AWS CloudFormation WordPress MultiAZ Template.",
+    "Parameters": {
+      "Owner": {
+        "Description": "The Owner.",
+        "Type": "String"
+      },
+      "Environment": {
+        "Description": "Name of the environment",
+        "Type": "String"
+      },
+      "Application": {
+        "Description": "Name of the application being deployed",
+        "Type": "String",
+        "Default": "wordpress"
+      },
+      "CustomerGatewayCIDR": {
+        "Description": "IP Address of the Customer Gateway",
+        "Type": "String",
+        "Default": "192.168.1.0/24",
+        "ConstraintDescription": "must be a valid IP CIDR range of the form x.x.x.x"
+      },
+      "VpcCIDR": {
+        "Description": "IP Address of VPC",
+        "Type": "String",
+        "Default": "10.0.0.0/16",
+        "ConstraintDescription": "must be a valid IP CIDR range of the form x.x.x.x"
+      },
+      "Target1": {
+        "Description": "IP Adress of on premise target",
+        "Type": "String",
+        "Default": "192.168.1.101"
+      },
+      "Target2": {
+        "Description": "IP Adress of on premise target",
+        "Type": "String",
+        "Default": "192.168.1.102"
+      },
+      "Target3": {
+        "Description": "IP Adress of on premise target",
+        "Type": "String",
+        "Default": "192.168.1.103"
+      },
+      "VpcId": {
+        "Type": "AWS::EC2::VPC::Id",
+        "Description": "VpcId of your existing Virtual Private Cloud (VPC)",
+        "ConstraintDescription": "must be the VPC Id of an existing Virtual Private Cloud."
+      },
+      "PublicSubnets": {
+        "Type": "List<AWS::EC2::Subnet::Id>",
+        "Description": "The list of SubnetIds in your Virtual Private Cloud (VPC)",
+        "ConstraintDescription": "must be a list of at least two existing subnets associated with at least two different availability zones. They should be residing in the selected Virtual Private Cloud."
+      },
+      "PrivateSubnets": {
+        "Type": "List<AWS::EC2::Subnet::Id>",
+        "Description": "The list of SubnetIds in your Virtual Private Cloud (VPC)",
+        "ConstraintDescription": "must be a list of at least two existing subnets associated with at least two different availability zones. They should be residing in the selected Virtual Private Cloud."
+      },
+      "DBClass": {
+        "Description": "Database instance class",
+        "Type": "String",
+        "Default": "db.t3.small",
+        "AllowedValues": [
+          "db.t3.micro",
+          "db.t3.small",
+          "db.t3.medium",
+          "db.t4.large"
+        ],
+        "ConstraintDescription": "must select a valid database instance type."
+      },
+      "DBName": {
+        "Default": "wordpress",
+        "Description": "The database name",
+        "Type": "String",
+        "MinLength": "1",
+        "MaxLength": "64",
+        "AllowedPattern": "[a-zA-Z][a-zA-Z0-9]*",
+        "ConstraintDescription": "must begin with a letter and contain only alphanumeric characters."
+      },
+      "DBUser": {
+        "NoEcho": "true",
+        "Description": "The database admin account username",
+        "Type": "String",
+        "MinLength": "1",
+        "MaxLength": "16",
+        "AllowedPattern": "[a-zA-Z][a-zA-Z0-9]*",
+        "ConstraintDescription": "must begin with a letter and contain only alphanumeric characters."
+      },
+      "DBPassword": {
+        "NoEcho": "true",
+        "Description": "The database admin account password",
+        "Type": "String",
+        "MinLength": "8",
+        "MaxLength": "41",
+        "AllowedPattern": "[a-zA-Z0-9]*",
+        "ConstraintDescription": "must contain only alphanumeric characters."
+      },
+      "MultiAZDatabase": {
+        "Default": "true",
+        "Description": "Create a Multi-AZ MySQL Amazon RDS database instance",
+        "Type": "String",
+        "AllowedValues": [
+          "true",
+          "false"
+        ],
+        "ConstraintDescription": "must be either true or false."
+      },
+      "DBAllocatedStorage": {
+        "Default": "20",
+        "Description": "The size of the database (Gb)",
+        "Type": "Number",
+        "MinValue": "5",
+        "MaxValue": "1024",
+        "ConstraintDescription": "must be between 5 and 1024Gb."
+      }
+    },
+    "Mappings": {},
+    "Conditions": {
+      "ProductionCondition": {
+        "Fn::Equals": [
+          {
+            "Ref": "Environment"
+          },
+          "prod"
+        ]
+      },
+      "NonProductionCondition": {
+        "Fn::Not": [
+          {
+            "Fn::Equals": [
+              {
+                "Ref": "Environment"
+              },
+              "prod"
+            ]
+          }
+        ]
+      }
+    },
+    "Resources": {
+      "DBEC2SecurityGroup": {
+        "Type": "AWS::RDS::DBSecurityGroup",
+        "Properties": {
+          "DBSecurityGroupIngress": [
+            {
+              "CIDRIP": {
+                "Ref": "CustomerGatewayCIDR"
+              }
+            },
+            {
+              "CIDRIP": {
+                "Ref": "VpcCIDR"
+              }
+            }
+          ],
+          "EC2VpcId": {
+            "Ref": "VpcId"
+          },
+          "GroupDescription": "Open database for access"
+        }
+      },
+      "DBSubnetGroup": {
+        "Type": "AWS::RDS::DBSubnetGroup",
+        "Properties": {
+          "DBSubnetGroupDescription": "Subnet Group for RDS",
+          "DBSubnetGroupName": {
+            "Fn::Sub": "${Owner}-${Environment}-${Application}-dbsubnetgroup"
+          },
+          "SubnetIds": {
+            "Ref": "PrivateSubnets"
+          }
+        }
+      },
+      "DBInstance": {
+        "DependsOn": "DBEC2SecurityGroup",
+        "Type": "AWS::RDS::DBInstance",
+        "Properties": {
+         "DBInstanceIdentifier": {"Fn::Sub": "${Owner}-${Application}-rds"},
+          "DBName": {
+            "Ref": "DBName"
+          },
+          "Engine": "MySQL",
+          "EngineVersion": "8.0.25",
+          "MultiAZ": {
+            "Ref": "MultiAZDatabase"
+          },
+          "MasterUsername": {
+            "Ref": "DBUser"
+          },
+          "MasterUserPassword": {
+            "Ref": "DBPassword"
+          },
+          "DBInstanceClass": {
+            "Ref": "DBClass"
+          },
+          "AllocatedStorage": {
+            "Ref": "DBAllocatedStorage"
+          },
+          "DBSecurityGroups": [
+            {
+              "Ref": "DBEC2SecurityGroup"
+            }
+          ],
+          "DBSubnetGroupName": {
+            "Ref": "DBSubnetGroup"
+          }
+        }
+      },
+      "LoadBalancer": {
+        "Type": "AWS::ElasticLoadBalancingV2::LoadBalancer",
+        "Properties": {
+          "Name": {
+            "Fn::Sub": "${Owner}-${Application}-lb"
+          },
+          "Subnets": {
+            "Ref": "PublicSubnets"
+          },
+          "LoadBalancerAttributes": [],
+          "Tags": [],
+          "Scheme": "internet-facing",
+          "Type": "network"
+        }
+      },
+      "LoadBalancerListener": {
+        "Type": "AWS::ElasticLoadBalancingV2::Listener",
+        "Properties": {
+          "DefaultActions": [
+            {
+              "Type": "forward",
+              "TargetGroupArn": {
+                "Ref": "LoadBalancerTargetGroup"
+              }
+            }
+          ],
+          "LoadBalancerArn": {
+            "Ref": "LoadBalancer"
+          },
+          "Port": "80",
+          "Protocol": "TCP"
+        }
+      },
+      "LoadBalancerTargetGroup": {
+        "Type": "AWS::ElasticLoadBalancingV2::TargetGroup",
+        "Properties": {
+          "HealthCheckIntervalSeconds": 10,
+          "HealthyThresholdCount": 3,
+          "Port": 80,
+          "Protocol": "TCP",
+          "UnhealthyThresholdCount": 3,
+          "VpcId": {
+            "Ref": "VpcId"
+          },
+          "TargetGroupAttributes": [],
+          "TargetType": "ip",
+          "Targets": [
+            {
+              "AvailabilityZone" : "all",
+              "Id": {
+                "Ref": "Target1"
+              },
+              "Port": 30000
+            },
+            {
+                "AvailabilityZone" : "all",
+              "Id": {
+                "Ref": "Target2"
+              },
+              "Port": 30000
+            },
+            {
+                "AvailabilityZone" : "all",
+              "Id": {
+                "Ref": "Target3"
+              },
+              "Port": 30000
+            }
+          ]
+        }
+      }
+    },
+    "Outputs": {}
+  }
+  

@@ -1,0 +1,48 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: wordpress
+  namespace: dev
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: wordpress
+  template:
+    metadata:
+      labels:
+        app: wordpress
+    spec:
+      containers:
+      - name: wordpress
+        image: ltrpeski/wordpress:0.14
+#        command: ["/bin/sh"]
+#        args: ["-c", "while true; do echo hello; sleep 10;done"]
+        env:
+          - name: AWS_DEFAULT_REGION
+            value: "ap-southeast-2"
+          - name: RDS_DNS
+            value: "aws-wordpress-rds.cu4u8zmfx0ao.ap-southeast-2.rds.amazonaws.com"
+          - name: RDS_DBNAME
+            value: "wordpress"
+          - name: RDS_USERNAME
+            valueFrom:
+              secretKeyRef:
+                name: rds
+                key: username
+          - name: RDS_USERNAME
+            valueFrom:
+              secretKeyRef:
+                name: rds
+                key: username
+          - name: RDS_PASSWORD
+            valueFrom:
+              secretKeyRef:
+                name: rds
+                key: password
+        ports:
+        - name: httpd
+          containerPort: 8000
+      dnsConfig:
+        nameservers:
+          - 8.8.8.8

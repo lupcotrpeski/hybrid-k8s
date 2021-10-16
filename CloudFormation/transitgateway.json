@@ -1,0 +1,471 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "AWS CloudFormation Transit Gateway to VPN Template.",
+  "Parameters": {
+    "Owner": {
+      "Description": "The Owner.",
+      "Type": "String"
+    },
+    "VPC": {
+      "Description": "VPC ID of the Source VPC",
+      "Type": "AWS::EC2::VPC::Id"
+    },
+    "SubnetA": {
+      "Type": "AWS::EC2::Subnet::Id",
+      "Description": "The SubnetId in your Virtual Private Cloud (VPC)",
+      "ConstraintDescription": "must be a subnets associated with at least two different availability zones. They should be residing in the selected Virtual Private Cloud."
+    },
+    "SubnetB": {
+      "Type": "AWS::EC2::Subnet::Id",
+      "Description": "The SubnetId in your Virtual Private Cloud (VPC)",
+      "ConstraintDescription": "must be a subnets associated with at least two different availability zones. They should be residing in the selected Virtual Private Cloud."
+    },
+    "SubnetC": {
+      "Type": "AWS::EC2::Subnet::Id",
+      "Description": "The SubnetId in your Virtual Private Cloud (VPC)",
+      "ConstraintDescription": "must be a subnets associated with at least two different availability zones. They should be residing in the selected Virtual Private Cloud."
+    },
+    "RouteTableSubnetA": {
+      "Description": "Route Table Subnet A.",
+      "Type": "String"
+    },
+    "RouteTableSubnetB": {
+      "Description": "Route Table Subnet B.",
+      "Type": "String"
+    },
+    "RouteTableSubnetC": {
+      "Description": "Route Table Subnet C.",
+      "Type": "String"
+    },
+    "RouteTablePublic": {
+      "Description": "Route Table Public.",
+      "Type": "String"
+    },
+    "CustomerGatewayIp": {
+      "Description": "IP Address of the Customer Gateway",
+      "Type": "String",
+      "Default": "1.2.3.4",
+      "ConstraintDescription": "must be a valid IP CIDR range of the form x.x.x.x"
+    },
+    "CustomerGatewayCIDR": {
+      "Description": "IP Address of the Customer Gateway",
+      "Type": "String",
+      "Default": "192.168.1.0/24",
+      "ConstraintDescription": "must be a valid IP CIDR range of the form x.x.x.x"
+    }
+  },
+  "Conditions": {
+    "CustomerGatewayCondition": {
+      "Fn::Not": [
+        {
+          "Fn::Equals": [
+            {
+              "Ref": "CustomerGatewayIp"
+            },
+            ""
+          ]
+        }
+      ]
+    }
+  },
+  "Resources": {
+    "TransitGateway": {
+      "Type": "AWS::EC2::TransitGateway",
+      "Properties": {
+        "AmazonSideAsn": 65000,
+        "Description": "Transit Gateway",
+        "AutoAcceptSharedAttachments": "enable",
+        "DefaultRouteTableAssociation": "disable",
+        "DnsSupport": "enable",
+        "VpnEcmpSupport": "enable"
+      }
+    },
+    "TransitGatewayRouteTable": {
+      "Type": "AWS::EC2::TransitGatewayRouteTable",
+      "Properties": {
+        "TransitGatewayId": {
+          "Ref": "TransitGateway"
+        }
+      }
+    },
+    "VPCTransitGatewayRouteTableAssociation": {
+      "Type": "AWS::EC2::TransitGatewayRouteTableAssociation",
+      "Properties": {
+        "TransitGatewayAttachmentId": {
+          "Ref": "VPCTransitGatewayAttachment"
+        },
+        "TransitGatewayRouteTableId": {
+          "Ref": "TransitGatewayRouteTable"
+        }
+      }
+    },
+    "TransitGatewayRouteTablePropagation": {
+      "Type": "AWS::EC2::TransitGatewayRouteTablePropagation",
+      "Properties": {
+        "TransitGatewayAttachmentId": {
+          "Ref": "VPCTransitGatewayAttachment"
+        },
+        "TransitGatewayRouteTableId": {
+          "Ref": "TransitGatewayRouteTable"
+        }
+      }
+    },
+    "VPNTransitGatewayRouteTableAssociation": {
+      "DependsOn": [
+        "RetreiveVPNGatewayId"
+      ],
+      "Type": "AWS::EC2::TransitGatewayRouteTableAssociation",
+      "Properties": {
+        "TransitGatewayAttachmentId": {
+          "Fn::GetAtt": [
+            "RetreiveVPNGatewayId",
+            "VPNGatewayId"
+          ]
+        },
+        "TransitGatewayRouteTableId": {
+          "Ref": "TransitGatewayRouteTable"
+        }
+      }
+    },
+    "VPNTransitGatewayRouteTablePropagation": {
+      "DependsOn": [
+        "RetreiveVPNGatewayId"
+      ],
+      "Type": "AWS::EC2::TransitGatewayRouteTablePropagation",
+      "Properties": {
+        "TransitGatewayAttachmentId": {
+          "Fn::GetAtt": [
+            "RetreiveVPNGatewayId",
+            "VPNGatewayId"
+          ]
+        },
+        "TransitGatewayRouteTableId": {
+          "Ref": "TransitGatewayRouteTable"
+        }
+      }
+    },
+    "VPCTransitGatewayAttachment": {
+      "Type": "AWS::EC2::TransitGatewayAttachment",
+      "Properties": {
+        "SubnetIds": [
+          {
+            "Ref": "SubnetA"
+          },
+          {
+            "Ref": "SubnetB"
+          },
+          {
+            "Ref": "SubnetC"
+          }
+        ],
+        "TransitGatewayId": {
+          "Ref": "TransitGateway"
+        },
+        "VpcId": {
+          "Ref": "VPC"
+        }
+      }
+    },
+    "TransitGatewayRoute": {
+      "DependsOn": [
+        "RetreiveVPNGatewayId"
+      ],
+      "Type": "AWS::EC2::TransitGatewayRoute",
+      "Properties": {
+        "DestinationCidrBlock": {
+          "Ref": "CustomerGatewayCIDR"
+        },
+        "TransitGatewayAttachmentId": {
+          "Fn::GetAtt": [
+            "RetreiveVPNGatewayId",
+            "VPNGatewayId"
+          ]
+        },
+        "TransitGatewayRouteTableId": {
+          "Ref": "TransitGatewayRouteTable"
+        }
+      }
+    },
+    "CustomerGateway": {
+      "Condition": "CustomerGatewayCondition",
+      "Type": "AWS::EC2::CustomerGateway",
+      "Properties": {
+        "Type": "ipsec.1",
+        "BgpAsn": "65001",
+        "IpAddress": {
+          "Ref": "CustomerGatewayIp"
+        }
+      }
+    },
+    "VPNConnection": {
+      "Condition": "CustomerGatewayCondition",
+      "Type": "AWS::EC2::VPNConnection",
+      "Properties": {
+        "Type": "ipsec.1",
+        "StaticRoutesOnly": "true",
+        "CustomerGatewayId": {
+          "Ref": "CustomerGateway"
+        },
+        "TransitGatewayId": {
+          "Ref": "TransitGateway"
+        }
+      }
+    },
+    "SubnetARoute": {
+      "Type": "AWS::EC2::Route",
+      "DependsOn": [
+        "VPCTransitGatewayAttachment",
+        "VPNConnection"
+      ],
+      "Properties": {
+        "RouteTableId": {
+          "Ref": "RouteTableSubnetA"
+        },
+        "DestinationCidrBlock": {
+          "Ref": "CustomerGatewayCIDR"
+        },
+        "TransitGatewayId": {
+          "Ref": "TransitGateway"
+        }
+      }
+    },
+    "SubnetBRoute": {
+      "Type": "AWS::EC2::Route",
+      "DependsOn": [
+        "VPCTransitGatewayAttachment",
+        "VPNConnection"
+      ],
+      "Properties": {
+        "RouteTableId": {
+          "Ref": "RouteTableSubnetB"
+        },
+        "DestinationCidrBlock": {
+          "Ref": "CustomerGatewayCIDR"
+        },
+        "TransitGatewayId": {
+          "Ref": "TransitGateway"
+        }
+      }
+    },
+    "SubnetCRoute": {
+      "Type": "AWS::EC2::Route",
+      "DependsOn": [
+        "VPCTransitGatewayAttachment",
+        "VPNConnection"
+      ],
+      "Properties": {
+        "RouteTableId": {
+          "Ref": "RouteTableSubnetC"
+        },
+        "DestinationCidrBlock": {
+          "Ref": "CustomerGatewayCIDR"
+        },
+        "TransitGatewayId": {
+          "Ref": "TransitGateway"
+        }
+      }
+    },
+    "PublicSubnetRoute": {
+      "Type": "AWS::EC2::Route",
+      "DependsOn": [
+        "VPCTransitGatewayAttachment",
+        "VPNConnection"
+      ],
+      "Properties": {
+        "RouteTableId": {
+          "Ref": "RouteTablePublic"
+        },
+        "DestinationCidrBlock": {
+          "Ref": "CustomerGatewayCIDR"
+        },
+        "TransitGatewayId": {
+          "Ref": "TransitGateway"
+        }
+      }
+    },
+    "TransitGatewayCustomProviderLogGroup": {
+      "Type": "AWS::Logs::LogGroup",
+      "Properties": {
+        "LogGroupName": {
+          "Fn::Sub": "/aws/lambda/${TransitGatewayCustomProvider}"
+        },
+        "RetentionInDays": 7
+      }
+    },
+    "TransitGatewayCustomProvider": {
+      "Type": "AWS::Lambda::Function",
+      "DependsOn": [
+        "LambdaRole"
+      ],
+      "Properties": {
+        "Description": "Transit Gateway Lambda function to retreive VPN Gateway ID.",
+        "Code": {
+          "ZipFile": {
+            "Fn::Join": [
+              "\n",
+              [
+                "import os",
+                "import json",
+                "import boto3",
+                "import time",
+                "import cfnresponse\n",
+                "def handler(event, context):",
+                "    client = boto3.client('ec2')",
+                "    response = client.describe_transit_gateway_attachments(",
+                "        Filters=[",
+                "            {",
+                "                'Name': 'resource-type',",
+                "                'Values': [",
+                "                    'vpn',",
+                "                ]",
+                "            },",
+                "            {",
+                "                'Name': 'transit-gateway-id',",
+                "                'Values': [",
+                "                    os.environ['TransitGateway']",
+                "                ]",
+                "            }",
+                "        ]",
+                "    )",
+                "    transitGatewayAttachment = response['TransitGatewayAttachments']",
+                "    responseData = {}",
+                "    for i in transitGatewayAttachment:",
+                "        responseData['VPNGatewayId'] = i['TransitGatewayAttachmentId']",
+                "        state = i['State']",
+                "        while state != \"available\":",
+                "            state = i['State']",
+                "            print(\"State:\", state)",
+                "            time.sleep(5)",
+                "    physicalResourceId = {}",
+                "    cfnresponse.send(event, context, cfnresponse.SUCCESS, responseData, physicalResourceId )",
+                "    return None"
+              ]
+            ]
+          }
+        },
+        "Environment": {
+          "Variables": {
+            "TransitGateway": {
+              "Ref": "TransitGateway"
+            }
+          }
+        },
+        "Handler": "index.handler",
+        "MemorySize": 128,
+        "Role": {
+          "Fn::GetAtt": [
+            "LambdaRole",
+            "Arn"
+          ]
+        },
+        "Runtime": "python3.8",
+        "Timeout": 300
+      }
+    },
+    "LambdaPolicy": {
+      "Type": "AWS::IAM::Policy",
+      "Properties": {
+        "PolicyName": "TransitGatewayCustomProvider",
+        "PolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Action": [
+                "ec2:DescribeTransitGatewayAttachments"
+              ],
+              "Resource": [
+                "*"
+              ]
+            },
+            {
+              "Effect": "Allow",
+              "Action": [
+                "lambda:InvokeFunction"
+              ],
+              "Resource": [
+                {
+                  "Fn::GetAtt": [
+                    "TransitGatewayCustomProvider",
+                    "Arn"
+                  ]
+                }
+              ]
+            },
+            {
+              "Effect": "Allow",
+              "Action": [
+                "logs:*"
+              ],
+              "Resource": "arn:aws:logs:*:*:*"
+            }
+          ]
+        },
+        "Roles": [
+          {
+            "Ref": "LambdaRole"
+          }
+        ]
+      }
+    },
+    "LambdaRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Action": [
+                "sts:AssumeRole"
+              ],
+              "Effect": "Allow",
+              "Principal": {
+                "Service": [
+                  "lambda.amazonaws.com"
+                ]
+              }
+            }
+          ]
+        }
+      }
+    },
+    "RetreiveVPNGatewayId": {
+      "Type": "Custom::RetreiveVPNGatewayId",
+      "DependsOn": [
+        "TransitGatewayCustomProvider",
+        "VPNConnection"
+      ],
+      "Properties": {
+        "ServiceToken": {
+          "Fn::GetAtt": [
+            "TransitGatewayCustomProvider",
+            "Arn"
+          ]
+        }
+      }
+    }
+  },
+  "Outputs": {
+    "TransitGatewayId": {
+      "Description": "Transit Gateway ID",
+      "Value": {
+        "Ref": "TransitGateway"
+      }
+    },
+    "TransitGatewayVPNAttachmentId": {
+      "Value": {
+        "Fn::GetAtt": [
+          "RetreiveVPNGatewayId",
+          "VPNGatewayId"
+        ]
+      },
+      "Description": "VPN Gateway ID"
+    },
+    "VPNGatewayId": {
+      "Value": {
+        "Ref": "VPNConnection"
+      },
+      "Description": "VPN Gateway ID"
+    }
+  }
+}
